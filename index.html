@@ -80,6 +80,22 @@ section{padding:110px 0}
 .feature .txt{padding:56px;display:flex;flex-direction:column;justify-content:center}
 .feature h3{font-size:clamp(30px,3.2vw,44px);line-height:1.08;margin:14px 0 18px}
 .feature p{margin:0 0 30px;font-size:18px}
+.feature{position:relative}
+.feature .art canvas,.feature .txt>.swap{transition:opacity .45s ease}
+.feature.fading .art canvas,.feature.fading .txt>.swap{opacity:0}
+.feature .link.off{color:var(--muted)}
+.feature .link.off .chev{background:var(--muted)}
+.fctrl{display:flex;align-items:center;gap:14px;margin-top:34px}
+.fdots{display:flex;gap:8px}
+.fdot{width:26px;height:4px;border:0;padding:0;background:#c8cfca;cursor:pointer;position:relative;overflow:hidden}
+.fdot[aria-current="true"]{background:#c8cfca}
+.fdot[aria-current="true"]::after{content:"";position:absolute;inset:0;background:var(--blue);transform-origin:left;animation:fill var(--dur,6s) linear forwards}
+.feature.paused .fdot[aria-current="true"]::after{animation-play-state:paused}
+.feature.static .fdot[aria-current="true"]::after{animation:none}
+@keyframes fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.farrow{width:32px;height:32px;border-radius:50%;border:1px solid #c8cfca;background:#fff;color:var(--navy);cursor:pointer;display:grid;place-items:center;font-size:16px;line-height:1}
+.farrow:hover{border-color:var(--blue);color:var(--blue)}
+.fcount{font-size:13px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
 @media (max-width:860px){.feature{grid-template-columns:1fr}.feature .art{min-height:240px}.feature .txt{padding:36px 24px}}
 
 /* filters */
@@ -174,17 +190,25 @@ footer{background:#01170a;color:#9aa5ad;padding:64px 0 40px;font-size:14px}
         <p>Some are live, some are still in progress. Each runs in your browser and is based on published guidance and public data.</p>
       </div>
 
-      <a class="feature" id="feature" target="_blank" rel="noopener">
-        <div class="art">
-          <canvas id="featArt" aria-hidden="true"></canvas>
-        </div>
+      <div class="feature" id="feature" role="region" aria-roledescription="carousel" aria-label="Featured tools">
+        <a class="art" id="fArtLink" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+          <canvas id="featArt"></canvas>
+        </a>
         <div class="txt">
-          <span class="kicker" id="fCat">Featured tool</span>
-          <h3 id="fName"></h3>
-          <p id="fSum"></p>
-          <span class="link">Open the explorer <span class="chev">›</span></span>
+          <div class="swap" aria-live="polite">
+            <span class="kicker" id="fCat">Featured tool</span>
+            <h3 id="fName"></h3>
+            <p id="fSum"></p>
+            <a class="link" id="fLink" target="_blank" rel="noopener">Open tool <span class="chev">›</span></a>
+          </div>
+          <div class="fctrl">
+            <button class="farrow" id="fPrev" aria-label="Previous tool">‹</button>
+            <div class="fdots" id="fDots"></div>
+            <button class="farrow" id="fNext" aria-label="Next tool">›</button>
+            <span class="fcount" id="fCount"></span>
+          </div>
         </div>
-      </a>
+      </div>
 
       <div class="filters" id="filters" role="group" aria-label="Filter tools by category"></div>
       <div class="grid" id="grid"></div>
@@ -236,7 +260,7 @@ const TOOLS = [
     status: "live",
     featured: true,
     art: "climate",
-    url: "https://climate.oenvc.com/",   // TODO: move the explorer here (currently at the site root)
+    url: "https://climate.oenvc.com/",
     summary: "Select any location to see projected physical climate hazards for 2030 and 2050 under RCP 2.6 and RCP 8.5, with transition risk by sector. Detailed regional data for Australia and New Zealand.",
     tags: "Global · AU & NZ detail · CSIRO, BoM, NIWA"
   },
@@ -254,7 +278,7 @@ const TOOLS = [
     art: "disclosure",
     category: "Disclosure",
     status: "live",
-    url: "https://disclosure.oenvc.com/",                              // TODO: add URL
+    url: "https://disclosure.oenvc.com/",
     summary: "Work out whether, and from when, your organisation falls into ASRS Group 1, 2 or 3 climate reporting under AASB S2.",
     tags: "Australia · ASRS · AASB S2"
   },
@@ -272,13 +296,52 @@ const TOOLS = [
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const isLive = t => t.status === 'live' && t.url;
 
-/* featured panel */
-const f = TOOLS.find(t => t.featured) || TOOLS[0];
-const fe = document.getElementById('feature');
-if (f && isLive(f)) fe.href = f.url; else fe.removeAttribute('target');
-document.getElementById('fCat').textContent = 'Featured · ' + f.category;
-document.getElementById('fName').textContent = f.name;
-document.getElementById('fSum').textContent = f.summary;
+/* featured panel: rotates through the tools (live ones first) */
+const SLIDE_MS = 6000;
+const slides = [...TOOLS].sort((a,b) => (isLive(a)?0:1) - (isLive(b)?0:1) || (b.featured?1:0) - (a.featured?1:0));
+let slideIdx = 0, slideTimer = null, slidePaused = false;
+const fe = document.getElementById('feature'), fDots = document.getElementById('fDots');
+fe.style.setProperty('--dur', SLIDE_MS + 'ms');
+fDots.innerHTML = slides.map((t,i) => `<button class="fdot" data-i="${i}" aria-label="Show ${esc(t.name)}"></button>`).join('');
+
+function fillSlide(t){
+  const live = isLive(t), link = document.getElementById('fLink'), art = document.getElementById('fArtLink');
+  document.getElementById('fCat').textContent = (live ? 'Featured · ' : 'Coming soon · ') + t.category;
+  document.getElementById('fName').textContent = t.name;
+  document.getElementById('fSum').textContent = t.summary;
+  link.innerHTML = (live ? 'Open tool' : 'In development') + ' <span class="chev">›</span>';
+  link.classList.toggle('off', !live);
+  [link, art].forEach(a => { if (live) a.href = t.url; else a.removeAttribute('href'); });
+  fDots.querySelectorAll('.fdot').forEach((d,i) => d.setAttribute('aria-current', i === slideIdx));
+  document.getElementById('fCount').textContent = `${slideIdx+1} / ${slides.length}`;
+  if (typeof drawFeature === 'function') drawFeature(t);
+}
+function showSlide(i, instant){
+  slideIdx = (i + slides.length) % slides.length;
+  if (instant){ fillSlide(slides[slideIdx]); return; }
+  fe.classList.add('fading');
+  setTimeout(() => { fillSlide(slides[slideIdx]); fe.classList.remove('fading'); }, 450);
+  restartTimer();
+}
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function restartTimer(){
+  clearTimeout(slideTimer);
+  if (reducedMotion || slides.length < 2) { fe.classList.add('static'); return; }
+  fDots.querySelectorAll('.fdot').forEach(d => { d.style.animation = 'none'; d.offsetWidth; d.style.animation = ''; });
+  if (!slidePaused) slideTimer = setTimeout(() => showSlide(slideIdx + 1), SLIDE_MS);
+}
+function pause(p){ slidePaused = p; fe.classList.toggle('paused', p); if (p) clearTimeout(slideTimer); else restartTimer(); }
+fe.addEventListener('mouseenter', () => pause(true));
+fe.addEventListener('mouseleave', () => pause(false));
+fe.addEventListener('focusin', () => pause(true));
+fe.addEventListener('focusout', () => pause(false));
+document.addEventListener('visibilitychange', () => pause(document.hidden));
+document.getElementById('fPrev').onclick = () => showSlide(slideIdx - 1);
+document.getElementById('fNext').onclick = () => showSlide(slideIdx + 1);
+fDots.addEventListener('click', e => { const d = e.target.closest('.fdot'); if (d) showSlide(+d.dataset.i); });
+let tx = null;
+fe.addEventListener('touchstart', e => tx = e.touches[0].clientX, {passive:true});
+fe.addEventListener('touchend', e => { if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; if (Math.abs(dx) > 40) showSlide(slideIdx + (dx < 0 ? 1 : -1)); tx = null; });
 
 /* grid + filters */
 const grid = document.getElementById('grid'), filters = document.getElementById('filters');
@@ -401,8 +464,10 @@ new IntersectionObserver(e => heroOn = e[0].isIntersecting).observe(heroCv);
 drawHero(); requestAnimationFrame(heroLoop);
 
 /* ---- featured: map with a selected location ---- */
-function drawFeature(){
+function drawFeature(t){
+  t = t || slides[slideIdx];
   const cv = document.getElementById('featArt'); const {ctx,W,H} = setupCanvas(cv); bg(ctx,W,H);
+  if (t && t.art && t.art !== 'climate' && THUMBS[t.art]) { THUMBS[t.art](ctx,W,H); return; }
   const n = makeNoise(42), sc = 1/260;
   contours(ctx, W, H, 6, (x,y) => n(x*sc, y*sc), LEVELS, topoStyle(.36, 1));
   const g = ctx.createRadialGradient(W*.6,H*.48,0,W*.6,H*.48,Math.max(W,H)*.6);
@@ -473,8 +538,8 @@ function drawThumbs(){
 
 function drawAll(){ heroGeo = null; drawHero(); drawFeature(); drawThumbs(); }
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawAll, 150); });
-render(); drawFeature();
-if (document.fonts) document.fonts.ready.then(drawFeature);
+render(); showSlide(0, true); restartTimer();
+if (document.fonts) document.fonts.ready.then(() => drawFeature());
 </script>
 </body>
 </html>
