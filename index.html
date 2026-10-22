@@ -331,13 +331,16 @@ footer{background:#01170a;color:#9fb0a4;padding:3.5rem 0 2.5rem;font-size:.875re
    status:   "live" (links out) or "soon" (shown, not clickable)
    featured: true makes the card double-width at the top of the grid
    isNew:    true adds a "New" tag and a link to it in the hero
+   category: "Construction" or "Climate reporting" (filter groups, in GROUPS order)
+   topic:    short label shown on the card after the group
    art:      climate | offsets | noise | disclosure | approvals | ecp
    =================================================================== */
 const TOOLS = [
   {
     id: "ecp",
-    name: "Site ECP Builder",
-    category: "Site controls",
+    name: "Environmental Control Plan Builder",
+    category: "Construction",
+    topic: "Site controls",
     status: "live",
     isNew: true,
     art: "ecp",
@@ -348,7 +351,8 @@ const TOOLS = [
   {
     id: "offsets",
     name: "Offsets Calculator",
-    category: "Offsets",
+    category: "Construction",
+    topic: "Offsets",
     status: "live",
     featured: true,
     art: "offsets",
@@ -359,7 +363,8 @@ const TOOLS = [
   {
     id: "climate",
     name: "Climate Impact Explorer",
-    category: "Climate risk",
+    category: "Climate reporting",
+    topic: "Climate risk",
     status: "live",
     art: "climate",
     url: "https://climate.oenvc.com/",
@@ -369,7 +374,8 @@ const TOOLS = [
   {
     id: "noise",
     name: "Construction Noise Estimator",
-    category: "Noise",
+    category: "Construction",
+    topic: "Noise",
     status: "live",
     art: "noise",
     url: "https://noise.oenvc.com/",
@@ -379,7 +385,8 @@ const TOOLS = [
   {
     id: "disclosure",
     name: "Climate Disclosure Group Classifier",
-    category: "Disclosure",
+    category: "Climate reporting",
+    topic: "Disclosure",
     status: "live",
     art: "disclosure",
     url: "https://disclosure.oenvc.com/",
@@ -389,7 +396,8 @@ const TOOLS = [
   {
     id: "approvals",
     name: "Environmental Approvals Screening",
-    category: "Approvals",
+    category: "Construction",
+    topic: "Approvals",
     status: "live",
     art: "approvals",
     url: "https://approvals.oenvc.com/",
@@ -419,14 +427,16 @@ if (newest){
 
 /* ===================== cards ===================== */
 const grid = $('#grid');
-const ordered = [...TOOLS].sort((a,b) => (isLive(a)?0:1) - (isLive(b)?0:1) || (b.featured?1:0) - (a.featured?1:0));
+const GROUPS = ['Construction', 'Climate reporting'];
+const gi = t => { const i = GROUPS.indexOf(t.category); return i < 0 ? GROUPS.length : i; };
+const ordered = [...TOOLS].sort((a,b) => (isLive(a)?0:1) - (isLive(b)?0:1) || (b.featured?1:0) - (a.featured?1:0) || gi(a) - gi(b));
 grid.innerHTML = ordered.map(t => {
   const live = isLive(t), tag = live ? 'a' : 'div', id = slug(t);
   const attrs = live ? `href="${esc(t.url)}" target="_blank" rel="noopener" aria-label="${esc(t.name)} (opens in a new tab)"` : '';
   return `<${tag} class="card${t.featured ? ' wide' : ''}" id="tool-${id}" data-cat="${esc(t.category)}" data-featured="${t.featured ? 1 : 0}" style="view-transition-name:tool-${id}" ${attrs}>
     <div class="art">${t.isNew ? '<span class="newtag">New</span>' : ''}<canvas data-art="${esc(t.art || 'climate')}" aria-hidden="true"></canvas></div>
     <div class="body">
-      <div class="meta"><span class="cat">${esc(t.category)}</span><span class="status${live ? '' : ' soon'}"><i></i>${live ? 'Live' : 'Coming soon'}</span></div>
+      <div class="meta"><span class="cat">${esc(t.category)}${t.topic ? ' · ' + esc(t.topic) : ''}</span><span class="status${live ? '' : ' soon'}"><i></i>${live ? 'Live' : 'Coming soon'}</span></div>
       <h3>${esc(t.name)}</h3>
       <p>${esc(t.summary)}</p>
       <div class="tags">${esc(t.tags)}</div>
@@ -440,7 +450,7 @@ $('#yr').textContent = new Date().getFullYear();
 /* ===================== segmented filter ===================== */
 const seg = $('#seg'), pill = seg.querySelector('.pill');
 const ALL = 'All';
-const cats = [ALL, ...new Set(ordered.map(t => t.category))];
+const cats = [ALL, ...GROUPS.filter(g => TOOLS.some(t => t.category === g)), ...new Set(TOOLS.map(t => t.category).filter(c => !GROUPS.includes(c)))];
 seg.insertAdjacentHTML('beforeend', cats.map((c,i) =>
   `<button type="button" data-cat="${esc(c)}" aria-pressed="${i === 0}">${esc(c)}${i === 0 ? `<span class="count">${TOOLS.length}</span>` : ''}</button>`).join(''));
 const segBtns = [...seg.querySelectorAll('button')];
