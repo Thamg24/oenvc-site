@@ -331,16 +331,26 @@ footer{background:#01170a;color:#9fb0a4;padding:3.5rem 0 2.5rem;font-size:.875re
    status:   "live" (links out) or "soon" (shown, not clickable)
    featured: true makes the card double-width at the top of the grid
    isNew:    true adds a "New" tag and a link to it in the hero
-   art:      climate | offsets | noise | disclosure | approvals
+   art:      climate | offsets | noise | disclosure | approvals | ecp
    =================================================================== */
 const TOOLS = [
+  {
+    id: "ecp",
+    name: "Site ECP Builder",
+    category: "Site controls",
+    status: "live",
+    isNew: true,
+    art: "ecp",
+    url: "https://ecp.oenvc.com/",
+    summary: "Outline a site on an aerial map, mark spill kits, drains, stockpiles and sensitive receivers, and print a two-page Environmental Control Plan with the controls that apply.",
+    tags: "Australia · New Zealand · Print to PDF (A3/A4)"
+  },
   {
     id: "offsets",
     name: "Offsets Calculator",
     category: "Offsets",
     status: "live",
     featured: true,
-    isNew: true,
     art: "offsets",
     url: "https://offsets.oenvc.com/",
     summary: "Draw an area of land on the map to estimate the biodiversity and carbon offsets it would need, or could provide.",
@@ -627,6 +637,35 @@ const ART = {
       ctx.fillStyle = rgba(c, .92); ctx.fill();
       ctx.beginPath(); ctx.arc(x + h/2, y + h/2, 5, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
     });
+  },
+  ecp(ctx,W,H){
+    const n = makeNoise(41), sc = 1/170;
+    contours(ctx,W,H,6,(x,y)=>n(x*sc+5,y*sc+2),LEVELS,topoStyle(.24,1));
+    // site boundary
+    const cx = W*.5, cy = H*.52, s = Math.min(W*.6, H*1.05);
+    const poly = [[-.42,-.34],[.40,-.38],[.44,.32],[-.40,.36]].map(([x,y]) => [cx + x*s, cy + y*s]);
+    ctx.beginPath(); poly.forEach((p,i) => i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1])); ctx.closePath();
+    ctx.fillStyle = rgba(PAL.deep,.16); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2.25; ctx.setLineDash([9,6]); ctx.stroke(); ctx.setLineDash([]);
+    const P = (u,v) => [cx + u*s, cy + v*s];
+    // stockpile area
+    const sp = [P(-.33,.06),P(-.17,.04),P(-.18,.24),P(-.34,.25)];
+    ctx.beginPath(); sp.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+    ctx.save(); ctx.clip(); ctx.strokeStyle = rgba(PAL.mid,.5); ctx.lineWidth = 1;
+    for (let d=-H; d<W; d+=6){ ctx.beginPath(); ctx.moveTo(d,0); ctx.lineTo(d+H,H); ctx.stroke(); } ctx.restore();
+    ctx.strokeStyle = rgba(PAL.mid,.9); ctx.lineWidth = 1.5; ctx.stroke();
+    // stormwater flow arrow
+    const [ax,ay] = P(-.05,-.2), [bx,by] = P(.2,.12), ang = Math.atan2(by-ay,bx-ax);
+    ctx.strokeStyle = rgba(PAL.lime,.95); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx-11*Math.cos(ang-.45),by-11*Math.sin(ang-.45)); ctx.lineTo(bx-11*Math.cos(ang+.45),by-11*Math.sin(ang+.45)); ctx.closePath();
+    ctx.fillStyle = rgba(PAL.lime,.95); ctx.fill();
+    // symbols: spill kit (triangle), drain (square), monitoring well (ringed circle)
+    const tri = (x,y) => { ctx.beginPath(); ctx.moveTo(x,y-8); ctx.lineTo(x+8,y+6); ctx.lineTo(x-8,y+6); ctx.closePath(); ctx.fillStyle='#fff'; ctx.fill();
+      ctx.fillStyle = PAL.bg; ctx.fillRect(x-1,y-3,2,5); ctx.fillRect(x-1,y+3,2,1.6); };
+    const sq = (x,y) => { ctx.fillStyle='#fff'; ctx.fillRect(x-6.5,y-6.5,13,13); ctx.fillStyle=PAL.bg; ctx.fillRect(x-4,y-2.5,8,1.4); ctx.fillRect(x-4,y+1.1,8,1.4); };
+    const well = (x,y) => { ctx.beginPath(); ctx.arc(x,y,7,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle=rgba(PAL.deep,1); ctx.fill(); };
+    tri(...P(-.24,-.22)); tri(...P(.3,-.05)); sq(...P(.05,.26)); sq(...P(.34,.22)); well(...P(.18,-.27));
+    if (W > 360){ chip(ctx, P(-.24,-.22)[0] + 14, P(-.24,-.22)[1] - 13, 'SK1'); chip(ctx, P(.34,.22)[0] + 12, P(.34,.22)[1] - 13, 'SD2'); }
   },
   approvals(ctx,W,H){
     const n = makeNoise(3), cols = 7, rows = 4, cw = W/cols, ch = H/rows;
